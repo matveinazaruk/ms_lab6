@@ -8,6 +8,12 @@
 *.lib
 *.a
 
+.tmp_versions
+*.cmd
+*.mod.c
+*.order
+*.symvers
+
 # Shared objects (inc. Windows DLLs)
 *.dll
 *.so
@@ -20,4 +26,4 @@
 *.app
 *.i*86
 *.x86_64
-*.hex
+*.hex
