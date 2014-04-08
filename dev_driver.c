@@ -3,6 +3,11 @@
 #include <linux/init.h> /* Определения макросов */
 #include <linux/fs.h>
 #include <asm/uaccess.h> /* put_user */
+#include <linux/interrupt.h>
+#include <linux/hrtimer.h>
+#include <linux/sched.h>
+
+
 
 // Ниже мы задаём информацию о модуле, которую можно будет увидеть с помощью Modinfo
 MODULE_LICENSE( "GPL" );
@@ -22,13 +27,44 @@ static int device_release( struct inode *, struct file * );
 static ssize_t device_read( struct file *, char *, size_t, loff_t * );
 static ssize_t device_write( struct file *filp, char *buf,
                       size_t count, loff_t *f_pos);
+static struct timer_list my_timer;
 
 // Глобальные переменные, объявлены как static, воизбежание конфликтов имен.
 static int major_number; /* Старший номер устройства нашего драйвера */
 static int is_device_open = 0; /* Используется ли девайс ? */
-static char text[ 5 ] = "test\n"; /* Текст, который мы будет отдавать при обращении к нашему устройству */
+static char text[ 5 ] = "hello\n"; /* Текст, который мы будет отдавать при обращении к нашему устройству */
 static char* text_ptr = text; /* Указатель на текущую позицию в тексте */
 static int tick = 0;
+static bool running = false;
+
+static struct hrtimer htimer;
+static ktime_t kt_periode;
+
+static enum hrtimer_restart timer_function(struct hrtimer * unused)
+{
+
+  if (tick != 0){
+    printk( "%s\n", text);
+
+    kt_periode = ktime_set(tick, 0); //seconds,nanoseconds
+  }
+    hrtimer_forward_now(& htimer, kt_periode);
+    return HRTIMER_RESTART;
+}
+
+static void timer_init(void)
+{
+    kt_periode = ktime_set(1, 0); //seconds,nanoseconds
+    hrtimer_init (& htimer, CLOCK_REALTIME, HRTIMER_MODE_REL);
+    htimer.function = timer_function;
+    hrtimer_start(& htimer, kt_periode, HRTIMER_MODE_REL);
+}
+
+static void timer_cleanup(void)
+{
+    hrtimer_cancel(& htimer);
+}
+
 
 // Прописываем обработчики операций на устройством
 static struct file_operations fops =
@@ -44,6 +80,7 @@ static int __init test_init( void )
 {
  printk( KERN_ALERT "TEST driver loaded!\n" );
 
+  timer_init();
  // Регистрируем устройсво и получаем старший номер устройства
  major_number = register_chrdev( 0, DEVICE_NAME, &fops );
 
@@ -66,18 +103,17 @@ static void __exit test_exit( void )
 {
  // Освобождаем устройство
  unregister_chrdev( major_number, DEVICE_NAME );
-
+ //if (running){
+  timer_cleanup();
+//}
  printk( KERN_ALERT "Test module is unloaded!\n" );
 }
 
-// Указываем наши функции загрузки и выгрузки
-module_init( test_init );
-module_exit( test_exit );
 
 static int device_open( struct inode *inode, struct file *file )
 {
  text_ptr = text;
-
+ 
  if ( is_device_open )
   return -EBUSY;
 
@@ -94,16 +130,8 @@ static int device_release( struct inode *inode, struct file *file )
 
 static ssize_t device_write( struct file *filp, char *buf,
                       size_t count, loff_t *f_pos) {
-
-  /*char *tmp;
-
-  char *temp;
-  tmp=buf+count-1;
-  copy_from_user(temp,buf,size);
-  printk("zapisal: %s\n", temp);*/
-  sscanf(buf, "%du", &tick);
+  sscanf(buf, "%d", &tick);
   printk("zapisal: %d\n", tick);
-
   return 1;
 }
 
@@ -126,3 +154,9 @@ static ssize_t device_read( struct file *filp, /* include/linux/fs.h */
 
  return byte_read;
 }
+
+
+
+// Указываем наши функции загрузки и выгрузки
+module_init( test_init );
+module_exit( test_exit );
