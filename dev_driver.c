@@ -13,13 +13,13 @@
 MODULE_LICENSE( "GPL" );
 MODULE_AUTHOR( "Matvei Nazaruk" );
 MODULE_DESCRIPTION( "Test module" );
-MODULE_SUPPORTED_DEVICE( "timer_out" ); /* /dev/testdevice */
+MODULE_SUPPORTED_DEVICE( "timer_out" );
 
 #define SUCCESS 0
-MODULE_SUPPORTED_DEVICE( "test" ); /* /dev/testdevice */
+MODULE_SUPPORTED_DEVICE( "test" ); 
 
 #define SUCCESS 0
-#define DEVICE_NAME "test" /* Имя нашего устройства */
+#define DEVICE_NAME "test"
 
 // Поддерживаемые нашим устройством операции
 static int device_open( struct inode *, struct file * );
@@ -29,130 +29,107 @@ static ssize_t device_write( struct file *filp, char *buf,
                       size_t count, loff_t *f_pos);
 static struct timer_list my_timer;
 
-// Глобальные переменные, объявлены как static, воизбежание конфликтов имен.
 static int major_number; /* Старший номер устройства нашего драйвера */
 static int is_device_open = 0; /* Используется ли девайс ? */
 static char text[ 5 ] = "hello\n"; /* Текст, который мы будет отдавать при обращении к нашему устройству */
 static char* text_ptr = text; /* Указатель на текущую позицию в тексте */
 static int tick = 0;
 static bool running = false;
-
 static struct hrtimer htimer;
 static ktime_t kt_periode;
 
-static enum hrtimer_restart timer_function(struct hrtimer * unused)
+static enum hrtimer_restart timer_function (struct hrtimer * unused)
 {
 
-  if (tick != 0){
-    printk( "%s\n", text);
-
-    kt_periode = ktime_set(tick, 0); //seconds,nanoseconds
-  }
+    if (tick != 0) {
+        printk( "%s\n", text);
+        kt_periode = ktime_set(tick, 0); 
+    }
     hrtimer_forward_now(& htimer, kt_periode);
     return HRTIMER_RESTART;
 }
 
-static void timer_init(void)
+static void timer_init (void)
 {
-    kt_periode = ktime_set(1, 0); //seconds,nanoseconds
+    kt_periode = ktime_set(1, 0); 
     hrtimer_init (& htimer, CLOCK_REALTIME, HRTIMER_MODE_REL);
     htimer.function = timer_function;
     hrtimer_start(& htimer, kt_periode, HRTIMER_MODE_REL);
 }
 
-static void timer_cleanup(void)
+static void timer_cleanup (void)
 {
     hrtimer_cancel(& htimer);
 }
 
-
-// Прописываем обработчики операций на устройством
 static struct file_operations fops =
- {
-  .read = device_read,
-  .write = device_write,
-  .open = device_open,
-  .release = device_release
- };
-
-// Функция загрузки модуля. Входная точка. Можем считать что это наш main()
-static int __init test_init( void )
 {
- printk( KERN_ALERT "TEST driver loaded!\n" );
+    .read = device_read,
+    .write = device_write,
+    .open = device_open,
+    .release = device_release
+};
 
-  timer_init();
- // Регистрируем устройсво и получаем старший номер устройства
- major_number = register_chrdev( 0, DEVICE_NAME, &fops );
-
- if ( major_number < 0 )
- {
-  printk( "Registering the character device failed with %d\n", major_number );
-  return major_number;
- }
-
- // Сообщаем присвоенный нам старший номер устройства
- printk( "Test module is loaded!\n" );
-
- printk( "Please, create a dev file with 'mknod /dev/test c %d 0'.\n", major_number );
-
- return SUCCESS;
+static int __init test_init (void)
+{
+    printk( KERN_ALERT "TEST driver loaded!\n" );
+    timer_init();
+    major_number = register_chrdev( 0, DEVICE_NAME, &fops );
+    if ( major_number < 0 )
+    {
+        printk( "Registering the character device failed with %d\n", major_number );
+        return major_number;
+    }
+    printk( "Please, create a dev file with 'mknod /dev/test c %d 0'.\n", major_number );
+    return SUCCESS;
 }
 
-// Функция выгрузки модуля
-static void __exit test_exit( void )
+static void __exit test_exit (void)
 {
- // Освобождаем устройство
- unregister_chrdev( major_number, DEVICE_NAME );
- //if (running){
-  timer_cleanup();
-//}
- printk( KERN_ALERT "Test module is unloaded!\n" );
+    unregister_chrdev( major_number, DEVICE_NAME );
+    timer_cleanup();
 }
 
 
-static int device_open( struct inode *inode, struct file *file )
+static int device_open (struct inode *inode, struct file *file )
 {
- text_ptr = text;
- 
- if ( is_device_open )
-  return -EBUSY;
+    text_ptr = text;
 
- is_device_open++;
+    if ( is_device_open ) {
+        return -EBUSY;
+    }
 
- return SUCCESS;
+    is_device_open++;
+    return SUCCESS;
 }
 
-static int device_release( struct inode *inode, struct file *file )
+static int device_release (struct inode *inode, struct file *file)
 {
- is_device_open--;
- return SUCCESS;
+    is_device_open--;
+    return SUCCESS;
 }
 
-static ssize_t device_write( struct file *filp, char *buf,
-                      size_t count, loff_t *f_pos) {
-  sscanf(buf, "%d", &tick);
-  printk("zapisal: %d\n", tick);
-  return 1;
+static ssize_t device_write (struct file *filp, char *buf, size_t count, loff_t *f_pos) 
+{
+    sscanf(buf, "%d", &tick);
+    printk("zapisal: %d\n", tick);
+    return 1;
 }
 
-static ssize_t device_read( struct file *filp, /* include/linux/fs.h */
-       char *buffer, /* buffer */
-       size_t length, /* buffer length */
-       loff_t * offset )
+static ssize_t device_read (struct file *filp, char *buffer,size_t length, loff_t * offset )
 {
- int byte_read = 0;
+    int byte_read = 0;
 
- if ( *text_ptr == 0 )
-  return 0;
-
- while ( length && *text_ptr )
- {
-  put_user( *( text_ptr++ ), buffer++ );
-  length--;
-  byte_read++;
- }
-
- return byte_read;
+    if ( *text_ptr == 0 ) {
+        return 0;
+    }
+    while ( length && *text_ptr )
+    {
+        put_user( *( text_ptr++ ), buffer++ );
+        length--;
+        byte_read++;
+    }
+    return byte_read;
 }
 
 
