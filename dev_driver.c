@@ -75,8 +75,7 @@ static int __init test_init (void)
     printk( KERN_ALERT "TEST driver loaded!\n" );
     timer_init();
     major_number = register_chrdev( 0, DEVICE_NAME, &fops );
-    if ( major_number < 0 )
-    {
+    if ( major_number < 0 ) {
         printk( "Registering the character device failed with %d\n", major_number );
         return major_number;
     }
@@ -123,8 +122,7 @@ static ssize_t device_read (struct file *filp, char *buffer,size_t length, loff_
     if ( *text_ptr == 0 ) {
         return 0;
     }
-    while ( length && *text_ptr )
-    {
+    while ( length && *text_ptr ) {
         put_user( *( text_ptr++ ), buffer++ );
         length--;
         byte_read++;
